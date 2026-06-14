@@ -1,0 +1,54 @@
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.12
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    environment:
+      CLICKHOUSE_DB: binance
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: binance
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./clickhouse/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8123/ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  worker:
+    build: .
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    environment:
+      BINANCE_BASE_URL: https://api.binance.com
+      SYMBOLS: BTCUSDT,ETHUSDT
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: "8123"
+      CLICKHOUSE_DATABASE: binance
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: binance
+      POLL_INTERVAL_SECONDS: "5"
+      GAP_GRACE_SECONDS: "180"
+      BINANCE_LIMIT: "1000"
+    command: ["python", "-m", "binance_pipeline.worker"]
+
+  dashboard:
+    build: .
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    ports:
+      - "8501:8501"
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: "8123"
+      CLICKHOUSE_DATABASE: binance
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: binance
+    command: ["streamlit", "run", "dashboard/app.py", "--server.address=0.0.0.0", "--server.port=8501"]
+
+volumes:
+  clickhouse-data:
