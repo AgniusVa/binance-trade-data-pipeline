@@ -122,15 +122,6 @@ incidents = query(
     """
 )
 
-recent_latency = query(
-    f"""
-    SELECT round(avg(dateDiff('millisecond', trade_time, ingested_at)) / 1000, 3) AS avg_latency_seconds
-    FROM trades_final
-    WHERE ingested_at >= now64(3) - INTERVAL 5 MINUTE
-    {"AND symbol = '" + selected_symbol + "'" if selected_symbol != "All" else ""}
-    """
-)
-
 batches = query(
     f"""
     SELECT
@@ -159,14 +150,7 @@ batches = stringify_id_columns(batches)
 col1, col2, col3 = st.columns(3)
 col1.metric("Final rows", int(summary["rows"].sum()) if not summary.empty else 0)
 col2.metric("Buffered rows", int(buffered["rows"].sum()) if not buffered.empty else 0)
-recent_avg = recent_latency["avg_latency_seconds"].iloc[0] if not recent_latency.empty else None
-col3.metric(
-    "Avg latency, last 5m",
-    "n/a" if recent_avg is None or recent_avg != recent_avg else f"{recent_avg:.3f}s",
-)
-
-col4, _ = st.columns([1, 2])
-col4.metric("Incidents", len(incidents))
+col3.metric("Incidents", len(incidents))
 
 st.subheader("Final table health")
 st.dataframe(summary, use_container_width=True, hide_index=True)
